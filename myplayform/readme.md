@@ -28,7 +28,7 @@ Armor reduces damage based on level<br>
 <br>
 
 
-**Technical Implementation<br>
+# Technical Implementation<br>
 
 Game Object Hierarchy: Base GameObject class with specialized classes for Player, Enemy, Platform, etc.<br>
 Collision Detection: Complete system for all game objects<br>
@@ -36,7 +36,7 @@ Animation: Simple progress circle for the search mechanic<br>
 Game Loop: Proper timing with deltaTime for consistent gameplay regardless of frame rate<br>
 <br>
 
-**How to Use This Code<br>
+# How to Use This Code<br>
 
 Set up SDL2 and SDL2_image libraries on your system<br>
 Compile the code with appropriate linking to SDL2 libraries<br>

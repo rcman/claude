@@ -1,4 +1,3 @@
-**his SDL2 framework implements all the features you requested for your platform game. Let me explain the key components:<br>
 
 # Core Gameplay Features<br>
 

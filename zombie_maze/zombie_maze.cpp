@@ -863,3 +863,74 @@ private:
     
     std::vector<std::shared_ptr<Entity>> entities;
     std::shared_ptr<Player> player;
+SDL_Texture* loadTexture(const std::string& path) {
+        // In a real implementation, you would load the texture from file
+        // For this example, we'll create a simple texture programmatically
+        SDL_Surface* surface = SDL_CreateRGBSurface(0, TILE_SIZE * 5, TILE_SIZE, 32,
+                                                    0xFF000000, 0x00FF0000, 0x0000FF00, 0x000000FF);
+        if (!surface) {
+            std::cerr << "Failed to create surface! SDL Error: " << SDL_GetError() << std::endl;
+            return nullptr;
+        }
+        
+        // Draw player sprite (blue square)
+        SDL_Rect playerRect = {0, 0, TILE_SIZE, TILE_SIZE};
+        SDL_FillRect(surface, &playerRect, SDL_MapRGB(surface->format, 0, 0, 255));
+        
+        // Draw zombie sprite (red square)
+        SDL_Rect zombieRect = {TILE_SIZE, 0, TILE_SIZE, TILE_SIZE};
+        SDL_FillRect(surface, &zombieRect, SDL_MapRGB(surface->format, 255, 0, 0));
+        
+        // Draw key sprite (yellow square)
+        SDL_Rect keyRect = {TILE_SIZE * 2, 0, TILE_SIZE, TILE_SIZE};
+        SDL_FillRect(surface, &keyRect, SDL_MapRGB(surface->format, 255, 255, 0));
+        
+        // Draw wall sprite (gray square)
+        SDL_Rect wallRect = {TILE_SIZE * 3, 0, TILE_SIZE, TILE_SIZE};
+        SDL_FillRect(surface, &wallRect, SDL_MapRGB(surface->format, 128, 128, 128));
+        
+        // Draw bullet sprite (white square)
+        SDL_Rect bulletRect = {TILE_SIZE * 4, 0, 8, 8};
+        SDL_FillRect(surface, &bulletRect, SDL_MapRGB(surface->format, 255, 255, 255));
+        
+        SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+        SDL_FreeSurface(surface);
+        
+        return texture;
+    }
+};
+
+// Main function
+int main(int argc, char* argv[]) {
+    Game game;
+    
+    if (!game.init()) {
+        std::cerr << "Failed to initialize game!" << std::endl;
+        return -1;
+    }
+    
+    // Main game loop
+    const int FPS = 60;
+    const int frameDelay = 1000 / FPS;
+    
+    Uint32 frameStart;
+    int frameTime;
+    
+    while (game.isRunning()) {
+        frameStart = SDL_GetTicks();
+        
+        game.handleEvents();
+        game.update();
+        game.render();
+        
+        frameTime = SDL_GetTicks() - frameStart;
+        
+        if (frameDelay > frameTime) {
+            SDL_Delay(frameDelay - frameTime);
+        }
+    }
+    
+    game.close();
+    
+    return 0;
+}

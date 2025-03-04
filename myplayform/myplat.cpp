@@ -915,7 +915,7 @@ void Game::HandleCollisions() {
         
         bool enemyOnGround = false;
         for (auto& platform : platforms) {
-            if (enemy->CheckCollision(platform) {
+            if (enemy->CheckCollision(platform.get())) {  // Missing closing parenthesis and .get() call
                 // Check if landing on top of platform
                 if (enemy->velocity.y > 0 && 
                     enemy->position.y + enemy->height - enemy->velocity.y <= platform->position.y) {
@@ -972,7 +972,6 @@ void Game::HandleCollisions() {
         }
     }
 }
-
 // Implementation of Game's LoadLevel method
 void Game::LoadLevel(int levelNum) {
     // Clear previous level

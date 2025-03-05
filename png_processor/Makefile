@@ -3,7 +3,7 @@ CFLAGS = -Wall -Wextra -std=c99
 LDFLAGS = $(shell sdl2-config --libs) -lSDL2_image
 
 TARGET = png_processor
-SRCS = png_processor.c
+SRCS = png_processor.cpp
 
 all: $(TARGET)
 

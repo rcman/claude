@@ -600,6 +600,8 @@ public:
         int tilesetWidth, tilesetHeight;
         SDL_QueryTexture(tileset, nullptr, nullptr, &tilesetWidth, &tilesetHeight);
 
+	printf("Value is %d, Value is %d/n", tilesetWidth, tilesetHeight);
+
         for (int y = 0; y < tilesetHeight; y += tileSize) {
             for (int x = 0; x < tilesetWidth; x += tileSize) {
                 SDL_Rect rect = { x, y, tileSize, tileSize };
@@ -968,10 +970,11 @@ private:
 
 public:
     Game() :
-        running(false),
+        running(true),
         window(nullptr),
         renderer(nullptr),
-        gameState(MAIN_MENU),
+        gameState(GAMEPLAY),
+       // gameState(MAIN_MENU),
         timeOfDay(DAY),
         gameTime(0),
         lastFrameTime(0),
@@ -1103,8 +1106,10 @@ public:
             std::cerr << "Font loading failed, using fallback: " << TTF_GetError() << std::endl;
             return false;
         }
-
+	setupGame();
+	gameState=GAMEPLAY;
         return true;
+
     }
 
     SDL_Texture* createColorTexture(int width, int height, Uint8 r, Uint8 g, Uint8 b, Uint8 a) {
@@ -1622,10 +1627,13 @@ public:
                   << "ms, Delta: " << deltaTime << "ms" << std::endl;
 
         lastFrameTime = currentTime;
+	
+	if (gameState != GAMEPLAY) {
+    printf("gamestate=%d, gameplay=%d\n", gameState, GAMEPLAY);
+    return;
+}
 
-        if (gameState != GAMEPLAY) {
-            return;
-        }
+	printf("about to run gametime +=deltatime");
 
         gameTime += deltaTime;
 
@@ -1651,9 +1659,9 @@ public:
 
             lastTimeUpdate = currentTime;
         }
-
+        printf("before player update");
         player->update();
-
+	printf("After player update");
         bool inBuilding = false;
 
         for (auto& building : buildings) {
@@ -1791,7 +1799,7 @@ public:
             player->render(renderer, camera);
         }
 
-        uiManager->render();
+        // uiManager->render();
 
         SDL_RenderPresent(renderer);
     }
@@ -1842,17 +1850,20 @@ public:
 // Main function
 int main(int argc, char* argv[]) {
     Game game;
-
+    printf("About to do game. init");
+    //game.gameState=GAMEPLAY;
     if (!game.init("Zombie Survival", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, false)) {
         std::cerr << "Game initialization failed!" << std::endl;
         return 1;
     }
-
+    printf("Game is about to be running");
     while (game.isRunning()) {
         Uint32 frameStart = SDL_GetTicks();
 
         game.handleEvents();
+	printf("HandleEvents");
         game.update();
+	printf("About to run game render");
         game.render();
 
         game.capFrameRate(frameStart);

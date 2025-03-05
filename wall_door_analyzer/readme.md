@@ -1,5 +1,4 @@
-SDL2 Wall and Door Tile Extractor
-Based on your clarification, I've created a more appropriate program that extracts reusable wall and door tiles from an input image. This program is designed to:
+# SDL2 Wall and Door Tile Extractor<br>
 
 Analyze an input image containing wall textures and doors
 Extract a repeatable wall tile that can be used to create walls of any length

@@ -1,42 +1,42 @@
-SDL2 Wall and Door Analyzer
-I've created a program that analyzes an image to identify wall textures and doors, then generates a new image based on the analysis, highlighting the walls, doors, and the length of wall segments between doors.
-How It Works
-The program:
+SDL2 Wall and Door Tile Extractor
+Based on your clarification, I've created a more appropriate program that extracts reusable wall and door tiles from an input image. This program is designed to:
 
-Loads an input image using SDL2_image
-Analyzes each row of pixels to identify wall and door segments
-Segments are defined by color - the program looks for:
+Analyze an input image containing wall textures and doors
+Extract a repeatable wall tile that can be used to create walls of any length
+Identify and extract door tiles as separate images
+Create a test image showing how these tiles can be reused to build new wall configurations
 
-Doors: Brown color (RGB: 150, 75, 0) with some tolerance
-Walls: Gray color (RGB: 100, 100, 100) with some tolerance
+How the Program Works
+Tile Extraction Process:
 
+Wall Detection:
 
-Creates a visualization showing:
-
-Wall segments in light gray
-Door segments in orange
-Indicator bars below wall segments that change color based on the length of the wall
+The program analyzes the image to determine the average color of wall sections
+It identifies wall areas based on color similarity within a threshold
 
 
+Door Detection:
 
-The Analysis Process
-
-The program scans the image row by row
-For each row, it identifies continuous segments of walls or doors
-When it finds a transition (wall to door or vice versa), it records the segment
-For each segment, it records:
-
-Starting and ending X position
-Y position (row)
-Whether it's a wall or door
-Length in pixels
+Doors are identified as regions that differ significantly from the wall color
+For each door, the program records its position and dimensions
+A minimum door width helps filter out small artifacts
 
 
+Wall Tile Extraction:
 
-The Output Image
-The output visualization:
+The program finds a suitable section of wall (between doors or at the edges)
+Extracts a portion of the wall texture as a repeatable tile
+Saves this as wall_tile.png
 
-Shows all detected wall and door segments at their original positions
-Thickens the segments for better visibility
-Adds colored bars below wall segments to represent their length
-Logs detailed segment information to the console
+
+Door Tile Extraction:
+
+For each identified door, extracts the door image
+Saves each door as door_tile_X.png (where X is the door number)
+
+
+Test Image Creation:
+
+Creates a new image with twice the width of the original
+Tiles the extracted wall texture across the image
+Places doors at new positions to demonstrate reusability

@@ -2,18 +2,20 @@
 #include <SDL2/SDL_image.h>
 #include <stdio.h>
 #include <stdbool.h>
-#include <stdlib.h>
+#include <string.h>
 
 // Define constants
-#define MAX_SEGMENTS 100
-#define DOOR_COLOR_R 150
-#define DOOR_COLOR_G 75
-#define DOOR_COLOR_B 0
-#define DOOR_THRESHOLD 30
+#define MAX_DOORS 20
+#define WALL_FILENAME "wall_tile.png"
+#define DOOR_FILENAME_PREFIX "door_tile_"
 #define WALL_COLOR_R 100
 #define WALL_COLOR_G 100
 #define WALL_COLOR_B 100
-#define WALL_THRESHOLD 30
+#define WALL_THRESHOLD 50
+#define DOOR_THRESHOLD 40
+#define MIN_DOOR_WIDTH 20
+#define MIN_TILE_WIDTH 32
+#define TILE_HEIGHT 64  // Assuming a fixed height for tiles
 
 typedef struct {
     SDL_Surface *surface;
@@ -23,12 +25,12 @@ typedef struct {
 } Image;
 
 typedef struct {
-    int start_x;
-    int end_x;
+    int x;
     int y;
-    bool is_door;
-    int length;
-} Segment;
+    int width;
+    int height;
+    SDL_Rect rect;
+} DoorPosition;
 
 // Function to load an image
 Image loadImage(const char *filename) {
@@ -58,167 +60,280 @@ Image loadImage(const char *filename) {
     return img;
 }
 
-// Function to check if a pixel is a door
-bool isDoor(Uint8 r, Uint8 g, Uint8 b) {
-    int diff_r = abs(r - DOOR_COLOR_R);
-    int diff_g = abs(g - DOOR_COLOR_G);
-    int diff_b = abs(b - DOOR_COLOR_B);
+// Function to check if a pixel is similar to another (within threshold)
+bool isColorSimilar(Uint8 r1, Uint8 g1, Uint8 b1, Uint8 r2, Uint8 g2, Uint8 b2, int threshold) {
+    int diff_r = abs(r1 - r2);
+    int diff_g = abs(g1 - g2);
+    int diff_b = abs(b1 - b2);
     
-    return (diff_r + diff_g + diff_b < DOOR_THRESHOLD);
+    return (diff_r + diff_g + diff_b < threshold);
 }
 
-// Function to check if a pixel is a wall
-bool isWall(Uint8 r, Uint8 g, Uint8 b) {
-    int diff_r = abs(r - WALL_COLOR_R);
-    int diff_g = abs(g - WALL_COLOR_G);
-    int diff_b = abs(b - WALL_COLOR_B);
-    
-    return (diff_r + diff_g + diff_b < WALL_THRESHOLD);
+// Function to check if a pixel is part of the wall
+bool isWallPixel(Uint8 r, Uint8 g, Uint8 b) {
+    return isColorSimilar(r, g, b, WALL_COLOR_R, WALL_COLOR_G, WALL_COLOR_B, WALL_THRESHOLD);
 }
 
-// Function to analyze the image and identify wall and door segments
-int analyzeImage(Image source, Segment segments[MAX_SEGMENTS]) {
-    int segment_count = 0;
+// Function to calculate the average color of a region
+void getAverageColor(Image img, int start_x, int start_y, int width, int height, Uint8 *avg_r, Uint8 *avg_g, Uint8 *avg_b) {
+    long sum_r = 0, sum_g = 0, sum_b = 0;
+    int count = 0;
     
-    // For each row in the image
-    for (int y = 0; y < source.height; y++) {
-        bool in_segment = false;
-        bool is_door_segment = false;
-        int segment_start = 0;
-        
-        // For each pixel in the row
-        for (int x = 0; x < source.width; x++) {
-            int index = y * source.width + x;
+    for (int y = start_y; y < start_y + height && y < img.height; y++) {
+        for (int x = start_x; x < start_x + width && x < img.width; x++) {
+            int index = y * img.width + x;
             
-            // Get RGB values
             Uint8 r, g, b, a;
-            SDL_GetRGBA(source.pixels[index], source.surface->format, &r, &g, &b, &a);
+            SDL_GetRGBA(img.pixels[index], img.surface->format, &r, &g, &b, &a);
             
-            bool pixel_is_door = isDoor(r, g, b);
-            bool pixel_is_wall = isWall(r, g, b);
-            
-            // Start a new segment
-            if (!in_segment && (pixel_is_door || pixel_is_wall)) {
-                in_segment = true;
-                segment_start = x;
-                is_door_segment = pixel_is_door;
-            }
-            // End the current segment
-            else if (in_segment && 
-                    ((is_door_segment && !pixel_is_door) || 
-                     (!is_door_segment && !pixel_is_wall) ||
-                     x == source.width - 1)) {
-                
-                // End of image case - include the last pixel
-                int segment_end = (x == source.width - 1 && (pixel_is_door || pixel_is_wall)) ? x : x - 1;
-                
-                // Only add segment if we have space
-                if (segment_count < MAX_SEGMENTS) {
-                    segments[segment_count].start_x = segment_start;
-                    segments[segment_count].end_x = segment_end;
-                    segments[segment_count].y = y;
-                    segments[segment_count].is_door = is_door_segment;
-                    segments[segment_count].length = segment_end - segment_start + 1;
-                    segment_count++;
-                }
-                
-                in_segment = false;
-                
-                // Check if this pixel starts a new segment of the other type
-                if ((is_door_segment && pixel_is_wall) || (!is_door_segment && pixel_is_door)) {
-                    in_segment = true;
-                    segment_start = x;
-                    is_door_segment = pixel_is_door;
-                }
-            }
-            // Switch segment type
-            else if (in_segment && 
-                    ((is_door_segment && pixel_is_wall) || 
-                     (!is_door_segment && pixel_is_door))) {
-                
-                // End the current segment
-                if (segment_count < MAX_SEGMENTS) {
-                    segments[segment_count].start_x = segment_start;
-                    segments[segment_count].end_x = x - 1;
-                    segments[segment_count].y = y;
-                    segments[segment_count].is_door = is_door_segment;
-                    segments[segment_count].length = x - 1 - segment_start + 1;
-                    segment_count++;
-                }
-                
-                // Start a new segment of the other type
-                segment_start = x;
-                is_door_segment = !is_door_segment;
+            if (a > 0) {  // Only count non-transparent pixels
+                sum_r += r;
+                sum_g += g;
+                sum_b += b;
+                count++;
             }
         }
     }
     
-    return segment_count;
+    if (count > 0) {
+        *avg_r = sum_r / count;
+        *avg_g = sum_g / count;
+        *avg_b = sum_b / count;
+    } else {
+        *avg_r = 0;
+        *avg_g = 0;
+        *avg_b = 0;
+    }
 }
 
-// Function to create an output image based on the analysis
-Image createOutputImage(int width, int height, Segment segments[], int segment_count) {
-    Image output = {0};
+// Function to find the doors in the image
+int findDoors(Image source, DoorPosition doors[MAX_DOORS]) {
+    int door_count = 0;
     
-    // Create a surface for the output
-    output.surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_RGBA8888);
-    if (!output.surface) {
-        printf("Error creating output surface: %s\n", SDL_GetError());
-        return output;
-    }
+    // First, try to determine what might be a door by looking for regions that differ from the wall
+    // We'll look for horizontal regions that are different from the wall texture
     
-    output.width = width;
-    output.height = height;
-    output.pixels = (Uint32 *)output.surface->pixels;
+    // First, get a reference wall color by sampling several wall regions
+    Uint8 wall_avg_r, wall_avg_g, wall_avg_b;
+    getAverageColor(source, 0, 0, source.width / 4, TILE_HEIGHT, &wall_avg_r, &wall_avg_g, &wall_avg_b);
     
-    // Fill with black background
-    SDL_FillRect(output.surface, NULL, SDL_MapRGBA(output.surface->format, 0, 0, 0, 255));
+    printf("Reference wall color: RGB(%d, %d, %d)\n", wall_avg_r, wall_avg_g, wall_avg_b);
     
-    // Define colors
-    Uint32 wall_color = SDL_MapRGBA(output.surface->format, 200, 200, 200, 255);
-    Uint32 door_color = SDL_MapRGBA(output.surface->format, 255, 120, 0, 255);
+    // Scan for doors (regions that differ significantly from the wall color)
+    bool in_door = false;
+    int door_start_x = 0;
     
-    // Draw segments
-    for (int i = 0; i < segment_count; i++) {
-        SDL_Rect rect;
-        rect.x = segments[i].start_x;
-        rect.y = segments[i].y;
-        rect.w = segments[i].length;
-        rect.h = 10;  // Thicken the segments for visibility
+    for (int x = 0; x < source.width; x++) {
+        // Sample a vertical strip to determine if it's part of a door
+        Uint8 strip_avg_r, strip_avg_g, strip_avg_b;
+        getAverageColor(source, x, 0, 1, source.height, &strip_avg_r, &strip_avg_g, &strip_avg_b);
         
-        SDL_FillRect(output.surface, &rect, segments[i].is_door ? door_color : wall_color);
+        bool is_door_pixel = !isColorSimilar(strip_avg_r, strip_avg_g, strip_avg_b, 
+                                           wall_avg_r, wall_avg_g, wall_avg_b, 
+                                           DOOR_THRESHOLD);
         
-        // Display segment length (for walls only)
-        if (!segments[i].is_door) {
-            // For simplicity, we'll just change the color based on length
-            // In a real app, you'd want to render text or more detailed visualization
-            int green_component = (segments[i].length * 2) % 255;
-            Uint32 length_color = SDL_MapRGBA(output.surface->format, 100, green_component, 100, 255);
+        // Starting a new door
+        if (!in_door && is_door_pixel) {
+            in_door = true;
+            door_start_x = x;
+        }
+        // Ending a door
+        else if (in_door && (!is_door_pixel || x == source.width - 1)) {
+            in_door = false;
             
-            rect.y += 12;  // Position below the segment
-            rect.h = 5;    // Smaller indicator
-            SDL_FillRect(output.surface, &rect, length_color);
+            // Calculate door width
+            int door_width = x - door_start_x;
+            if (x == source.width - 1 && is_door_pixel) {
+                door_width++;  // Include the last pixel
+            }
+            
+            // Only add if it's wide enough to be a door and we have space
+            if (door_width >= MIN_DOOR_WIDTH && door_count < MAX_DOORS) {
+                doors[door_count].x = door_start_x;
+                doors[door_count].y = 0;
+                doors[door_count].width = door_width;
+                doors[door_count].height = source.height;
+                doors[door_count].rect = (SDL_Rect){door_start_x, 0, door_width, source.height};
+                door_count++;
+                
+                printf("Door found at x=%d with width=%d\n", door_start_x, door_width);
+            }
         }
     }
     
-    return output;
+    return door_count;
 }
 
-// Function to save the output image
-bool saveImage(Image img, const char *filename) {
-    int result = IMG_SavePNG(img.surface, filename);
-    return (result == 0);
+// Function to extract a wall tile
+bool extractWallTile(Image source, DoorPosition doors[], int door_count) {
+    // Find a good section of wall to use as a tile (between doors or at the edges)
+    int tile_x = 0;
+    int tile_width = MIN_TILE_WIDTH;
+    bool tile_found = false;
+    
+    // Try to find a section of wall between doors
+    for (int i = 0; i < door_count - 1; i++) {
+        int space_between = doors[i+1].x - (doors[i].x + doors[i].width);
+        if (space_between >= MIN_TILE_WIDTH) {
+            tile_x = doors[i].x + doors[i].width;
+            tile_width = MIN_TILE_WIDTH;  // Or use a larger value if you want
+            tile_found = true;
+            break;
+        }
+    }
+    
+    // If no suitable space between doors, check the beginning or end
+    if (!tile_found) {
+        if (door_count > 0) {
+            if (doors[0].x >= MIN_TILE_WIDTH) {
+                // Use beginning of wall
+                tile_x = 0;
+                tile_width = MIN_TILE_WIDTH;
+                tile_found = true;
+            } else if (source.width - (doors[door_count-1].x + doors[door_count-1].width) >= MIN_TILE_WIDTH) {
+                // Use end of wall
+                tile_x = doors[door_count-1].x + doors[door_count-1].width;
+                tile_width = MIN_TILE_WIDTH;
+                tile_found = true;
+            }
+        } else {
+            // No doors, use beginning of wall
+            tile_x = 0;
+            tile_width = MIN_TILE_WIDTH;
+            tile_found = true;
+        }
+    }
+    
+    if (!tile_found) {
+        printf("Could not find a suitable wall section to extract a tile from.\n");
+        return false;
+    }
+    
+    printf("Extracting wall tile from x=%d with width=%d\n", tile_x, tile_width);
+    
+    // Create a surface for the wall tile
+    SDL_Surface *tile_surface = SDL_CreateRGBSurfaceWithFormat(0, tile_width, source.height, 
+                                                              32, SDL_PIXELFORMAT_RGBA8888);
+    if (!tile_surface) {
+        printf("Error creating wall tile surface: %s\n", SDL_GetError());
+        return false;
+    }
+    
+    // Copy the wall section to the tile
+    SDL_Rect src_rect = {tile_x, 0, tile_width, source.height};
+    SDL_BlitSurface(source.surface, &src_rect, tile_surface, NULL);
+    
+    // Save the wall tile
+    int result = IMG_SavePNG(tile_surface, WALL_FILENAME);
+    SDL_FreeSurface(tile_surface);
+    
+    if (result == 0) {
+        printf("Wall tile saved to %s\n", WALL_FILENAME);
+        return true;
+    } else {
+        printf("Failed to save wall tile: %s\n", IMG_GetError());
+        return false;
+    }
+}
+
+// Function to extract door tiles
+bool extractDoorTiles(Image source, DoorPosition doors[], int door_count) {
+    for (int i = 0; i < door_count; i++) {
+        // Create a surface for the door tile
+        SDL_Surface *door_surface = SDL_CreateRGBSurfaceWithFormat(0, doors[i].width, source.height, 
+                                                                 32, SDL_PIXELFORMAT_RGBA8888);
+        if (!door_surface) {
+            printf("Error creating door tile surface: %s\n", SDL_GetError());
+            continue;
+        }
+        
+        // Copy the door to the tile
+        SDL_Rect src_rect = {doors[i].x, 0, doors[i].width, source.height};
+        SDL_BlitSurface(source.surface, &src_rect, door_surface, NULL);
+        
+        // Create the filename
+        char filename[256];
+        snprintf(filename, sizeof(filename), "%s%d.png", DOOR_FILENAME_PREFIX, i + 1);
+        
+        // Save the door tile
+        int result = IMG_SavePNG(door_surface, filename);
+        SDL_FreeSurface(door_surface);
+        
+        if (result == 0) {
+            printf("Door tile %d saved to %s\n", i + 1, filename);
+        } else {
+            printf("Failed to save door tile %d: %s\n", i + 1, IMG_GetError());
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+// Function to create a test image using the extracted tiles
+bool createTestImage(Image source, DoorPosition doors[], int door_count, const char *filename) {
+    // Create a surface for the test image (making it wider to demonstrate tiling)
+    int test_width = source.width * 2;  // Double the width to show tiling
+    SDL_Surface *test_surface = SDL_CreateRGBSurfaceWithFormat(0, test_width, source.height, 
+                                                              32, SDL_PIXELFORMAT_RGBA8888);
+    if (!test_surface) {
+        printf("Error creating test surface: %s\n", SDL_GetError());
+        return false;
+    }
+    
+    // Load the wall tile
+    Image wall_tile = loadImage(WALL_FILENAME);
+    if (!wall_tile.surface) {
+        SDL_FreeSurface(test_surface);
+        return false;
+    }
+    
+    // Fill the test image with tiled wall
+    for (int x = 0; x < test_width; x += wall_tile.width) {
+        SDL_Rect dest_rect = {x, 0, wall_tile.width, wall_tile.height};
+        SDL_BlitSurface(wall_tile.surface, NULL, test_surface, &dest_rect);
+    }
+    
+    // Place doors at new positions
+    for (int i = 0; i < door_count && i < 2; i++) {  // Place up to 2 doors in the test image
+        char door_filename[256];
+        snprintf(door_filename, sizeof(door_filename), "%s%d.png", DOOR_FILENAME_PREFIX, i + 1);
+        
+        Image door_tile = loadImage(door_filename);
+        if (door_tile.surface) {
+            // Place door at a new position
+            SDL_Rect dest_rect = {(i + 1) * test_width / 3, 0, door_tile.width, door_tile.height};
+            SDL_BlitSurface(door_tile.surface, NULL, test_surface, &dest_rect);
+            
+            SDL_FreeSurface(door_tile.surface);
+        }
+    }
+    
+    // Save the test image
+    int result = IMG_SavePNG(test_surface, filename);
+    
+    // Clean up
+    SDL_FreeSurface(wall_tile.surface);
+    SDL_FreeSurface(test_surface);
+    
+    if (result == 0) {
+        printf("Test image saved to %s\n", filename);
+        return true;
+    } else {
+        printf("Failed to save test image: %s\n", IMG_GetError());
+        return false;
+    }
 }
 
 int main(int argc, char *argv[]) {
     // Check command line arguments
-    if (argc < 3) {
-        printf("Usage: %s <input_image.png> <output_image.png>\n", argv[0]);
+    if (argc < 2) {
+        printf("Usage: %s <input_image.png> [test_output.png]\n", argv[0]);
         return 1;
     }
     
     const char *inputFile = argv[1];
-    const char *outputFile = argv[2];
+    const char *testFile = (argc >= 3) ? argv[2] : "test_output.png";
     
     // Initialize SDL and SDL_image
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -243,42 +358,31 @@ int main(int argc, char *argv[]) {
     
     printf("Image loaded: %s (%d x %d)\n", inputFile, source.width, source.height);
     
-    // Analyze the image
-    Segment segments[MAX_SEGMENTS];
-    int segment_count = analyzeImage(source, segments);
+    // Find doors in the image
+    DoorPosition doors[MAX_DOORS];
+    int door_count = findDoors(source, doors);
     
-    printf("Analysis complete. Found %d segments.\n", segment_count);
+    printf("Found %d door(s) in the image.\n", door_count);
     
-    // Display segments
-    for (int i = 0; i < segment_count; i++) {
-        printf("Segment %d: %s at y=%d, x=%d to %d (length: %d)\n",
-               i,
-               segments[i].is_door ? "DOOR" : "WALL",
-               segments[i].y,
-               segments[i].start_x,
-               segments[i].end_x,
-               segments[i].length);
+    // Extract wall tile
+    if (!extractWallTile(source, doors, door_count)) {
+        printf("Failed to extract wall tile.\n");
     }
     
-    // Create output image
-    Image output = createOutputImage(source.width, source.height, segments, segment_count);
-    if (!output.surface) {
-        SDL_FreeSurface(source.surface);
-        IMG_Quit();
-        SDL_Quit();
-        return 1;
+    // Extract door tiles
+    if (door_count > 0) {
+        if (!extractDoorTiles(source, doors, door_count)) {
+            printf("Failed to extract some door tiles.\n");
+        }
     }
     
-    // Save output image
-    if (saveImage(output, outputFile)) {
-        printf("Output image saved to %s\n", outputFile);
-    } else {
-        printf("Failed to save output image: %s\n", IMG_GetError());
+    // Create a test image using the extracted tiles
+    if (!createTestImage(source, doors, door_count, testFile)) {
+        printf("Failed to create test image.\n");
     }
     
     // Clean up
     SDL_FreeSurface(source.surface);
-    SDL_FreeSurface(output.surface);
     IMG_Quit();
     SDL_Quit();
     
